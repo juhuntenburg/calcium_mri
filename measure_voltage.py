@@ -1,50 +1,30 @@
-int32       error=0;
-TaskHandle  taskHandle=0;
-int32       read;
-float64     data[1000];
-char        errBuff[2048]={'\0'};
+from PyDAQmx import Task
+import PyDAQmx
+import numpy as np
+from ctypes import byref
 
-/*********************************************/
-// DAQmx Configure Code
-/*********************************************/
-DAQmxErrChk (DAQmxCreateTask("",&taskHandle));
-DAQmxErrChk (DAQmxCreateAIVoltageChan(taskHandle,"Dev1/ai0","",DAQmx_Val_Cfg_Default,-10.0,10.0,DAQmx_Val_Volts,NULL));
-DAQmxErrChk (DAQmxCfgSampClkTiming(taskHandle,"",10000.0,DAQmx_Val_Rising,DAQmx_Val_FiniteSamps,1000));
+class ReadPMT1(Task):
+    def __init__(self):
+        Task.__init__(self)
+        self.data = np.zeros(1000)
+        self.a = []
+        self.CreateAIVoltageChan("Dev1/ai0","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None)
+        self.CfgSampClkTiming(None,1000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,1000)
+        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,1000,0)
+        self.AutoRegisterDoneEvent(0)
+    def EveryNCallback(self):
+        read = PyDAQmx.int32()
+        self.ReadAnalogF64(1000,10.0,PyDAQmx.DAQmx_Val_GroupByScanNumber,self.data,1000,byref(read),None)
+        self.a.extend(self.data.tolist())
+        print(self.data[0])
+        return 0 # The function should return an integer
+    def DoneCallback(self, status):
+        print("Status",status.value)
+        return 0 # The function should return an integer
 
-/*********************************************/
-// DAQmx Start Code
-/*********************************************/
-DAQmxErrChk (DAQmxStartTask(taskHandle));
+pmt1_signal=ReadPMT1()
+pmt1_signal.StartTask()
+input('Acquiring PMT1 continuously. Press Enter to interrupt\n')
 
-/*********************************************/
-// DAQmx Read Code
-/*********************************************/
-DAQmxErrChk (DAQmxReadAnalogF64(taskHandle,1000,10.0,DAQmx_Val_GroupByChannel,data,1000,&read,NULL));
-
-printf("Acquired %d points\n",(int)read);
-
-Description:
-*    This example demonstrates how to acquire a finite amount of data
-*    using the DAQ device's internal clock.
-*
-* Instructions for Running:
-*    1. Select the physical channel to correspond to where your
-*       signal is input on the DAQ device.
-*    2. Enter the minimum and maximum voltages.
-*    Note: For better accuracy try to match the input range to the
-*          expected voltage level of the measured signal.
-*    3. Select the number of samples to acquire.
-*    4. Set the rate of the acquisition.
-*    Note: The rate should be AT LEAST twice as fast as the maximum
-*          frequency component of the signal being acquired.
-*
-* Steps:
-*    1. Create a task.
-*    2. Create an analog input voltage channel.
-*    3. Set the rate for the sample clock. Additionally, define the
-*       sample mode to be finite and set the number of samples to be
-*       acquired per channel.
-*    4. Call the Start function to start the acquisition.
-*    5. Read all of the waveform data.
-*    6. Call the Clear Task function to clear the task.
-*    7. Display an error if any.
+pmt1_signal.StopTask()
+pmt1_signal.ClearTask()
