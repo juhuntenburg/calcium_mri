@@ -1,13 +1,12 @@
-from PyDAQmx import Task
-import PyDAQmx
-from ctypes import byref
+import os, time, sys
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import seaborn as sns
-import numpy as np
-import os
-import time
-import pandas as pd
+from PyDAQmx import Task
+import PyDAQmx
+from ctypes import byref
 
 sns.set()
 sns.set_style('ticks')
@@ -64,60 +63,69 @@ class ReadPMT1(Task):
 
 if __name__ == "__main__":
 
-    acq = True
-    first_pass = True
-    gains = []
-    while acq == True:
-        # Ask for voltage gain value
-        pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V\n"))
-        print("Setting voltage gain to {0}".format(pmt1_gain_val))
-        # Create an analog output channel with a range of 0-1.25 V range and write out the voltage value set above
-        pmt1_gain = Task()
-        pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao0","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
-        pmt1_gain.StartTask()
-        print("Acquiring PMT1 continuously")
-        pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
-        pmt1_gain.StopTask()
-        pmt1_gain.ClearTask()
+        acq = True
+        first_pass = True
+        gains = []
+        while acq == True:
+            try:
 
-        if first_pass == True:
-            # Start the acquisition
-            pmt1_signal = ReadPMT1()
-            pmt1_signal.StartTask()
-            first_pass = False
-        else:
-            gains.extend((len(pmt1_signal.a)-len(gains))*[old_pmt1_gain_val])
+                # Ask for voltage gain value
+                pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
+                print("Setting voltage gain to {0}".format(pmt1_gain_val))
+                # Create an analog output channel with a range of 0-1.25 V range and write out the voltage value set above
+                pmt1_gain = Task()
+                pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao0","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
+                pmt1_gain.StartTask()
+                print("Acquiring PMT1 continuously")
+                pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
+                pmt1_gain.StopTask()
+                pmt1_gain.ClearTask()
 
-        user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain\n')
+                if first_pass == True:
+                    # Start the acquisition
+                    pmt1_signal = ReadPMT1()
+                    pmt1_signal.StartTask()
+                    first_pass = False
+                else:
+                    gains.extend((len(pmt1_signal.a)-len(gains))*[old_pmt1_gain_val])
 
-        while user_input == 'p':
-            # plot and keep waiting for input
-            fig = plt.figure(figsize=(10,5))
-            ax1 = fig.add_subplot(1,1,1)
-            run_animation()
-            plt.show()
-            user_input = input('')
+                user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
 
-        if user_input == 'c':
-            old_pmt1_gain_val = pmt1_gain_val
-            pass # go back to the beginning of the outer loop
+                while user_input == 'p':
+                    # plot and keep waiting for input
+                    fig = plt.figure(figsize=(10,5))
+                    ax1 = fig.add_subplot(1,1,1)
+                    run_animation()
+                    plt.show()
+                    user_input = input('')
 
-        elif user_input == 'x':
-            acq = False # break the outer loop
-            # stop task
-            print("Stopped acquisition. Acquired {0} data points".format(len(pmt1_signal.a)))
-            pmt1_signal.StopTask()
-            gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val])
-            # save data
-            df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
-            s = input("To save data, enter absolute file path or press Enter to save data with time stamp in current directory\n")
-            if s == "":
+                if user_input == 'c':
+                    old_pmt1_gain_val = pmt1_gain_val
+                    pass # go back to the beginning of the outer loop
+
+                elif user_input == 'x':
+                    # stop task
+                    print("Stopped acquisition. Acquired {0} data points".format(len(pmt1_signal.a)))
+                    pmt1_signal.StopTask()
+                    gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val])
+                    # save data
+                    df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
+                    s = input("To save data, enter absolute file path or press Enter to save data with time stamp in current directory: ")
+                    if s == "":
+                        timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
+                        df.to_csv(os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp)), sep=",", index=False)
+                    else:
+                        df.to_csv(s, sep=",", index=False)
+                    # clear task
+                    pmt1_signal.ClearTask()
+                    acq = False # break the outer loop
+
+            except Exception as e:
+                pmt1_signal.StopTask()
+                print("\n!!Unexpected error!!\nTrying to save data before exiting")
                 timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
-                df.to_csv(os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp)), sep=",", index=False)
-            else:
-                df.to_csv(s, sep=",", index=False)
-            # clear task
-            pmt1_signal.ClearTask()
-
-        else:
-            input("Invalid input. Enter p to plot data, x to stop acquisition or c to change the voltage gain\n")
+                gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val])
+                df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
+                df.to_csv(os.path.join(os.curdir,"{0}_pmt1_crash.csv".format(timestamp)), sep=",", index=False)
+                print("Data saved to {0}_pmt1_crash.csv\n".format(timestamp))
+                raise e
