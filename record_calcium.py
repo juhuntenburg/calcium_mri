@@ -68,16 +68,24 @@ if __name__ == "__main__":
         gains = []
         while acq == True:
             try:
-                # Ask for voltage gain value
-                pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
+                try:
+                    pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
+                except ValueError:
+                    print("Please input an integer or float")
+                    pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
+
                 # Create an analog output channel with a range of 0-1.25 V range and write out the voltage value set above
                 pmt1_gain = Task()
                 pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao1","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
                 pmt1_gain.StartTask()
-                print("Setting voltage gain to {0}".format(pmt1_gain_val))
-                pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
-                pmt1_gain.StopTask()
-                pmt1_gain.ClearTask()
+                try:
+                    pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
+                    print("Setting voltage gain to {0}".format(pmt1_gain_val))
+                    pmt1_gain.StopTask()
+                    pmt1_gain.ClearTask()
+                except PyDAQmx.DAQmxFunctions.InvalidAODataWriteError as a:
+                    print(a.message)
+                    pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
 
                 if first_pass == True:
                     # Start the acquisition of the PMT signal using the class above
@@ -89,41 +97,49 @@ if __name__ == "__main__":
                     # If the gain has been changed during running acqusition, keep record for how long the previous gain was used
                     gains.extend((len(pmt1_signal.a)-len(gains))*[old_pmt1_gain_val])
 
-                user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
-                while user_input == 'p':
-                    # plot and keep waiting for input
-                    fig = plt.figure(figsize=(10,5))
-                    ax1 = fig.add_subplot(1,1,1)
-                    run_animation()
-                    plt.show() # This will block the command line until the figure is closed
+                invalid_input = True
+                while invalid_input:
                     user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
+                    while user_input == 'p':
+                        invalid_input = False
+                        # plot and keep waiting for input
+                        fig = plt.figure(figsize=(10,5))
+                        ax1 = fig.add_subplot(1,1,1)
+                        run_animation()
+                        plt.show() # This will block the command line until the figure is closed
+                        user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
 
-                if user_input == 'c':
-                    old_pmt1_gain_val = pmt1_gain_val # store the previous gain value before resetting it
-                    pass # go back to the beginning of the outer loop
+                    if user_input == 'c':
+                        invalid_input = False
+                        old_pmt1_gain_val = pmt1_gain_val # store the previous gain value before resetting it
+                        pass # go back to the beginning of the outer loop
 
-                elif user_input == 'x':
-                    # stop task
-                    pmt1_signal.StopTask()
-                    print("Stopped acquisition. Acquired {0} data points".format(len(pmt1_signal.a)))
-                    gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val]) # keep record of last gain value used
-                    # save data
-                    df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
-                    s = input("To save data, enter filename or path or press Enter to save data with time stamp in current directory: ")
-                    if s == "":
-                        timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
-                        s = os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp))
+                    elif user_input == 'x':
+                        invalid_input = False
+                        # stop task
+                        pmt1_signal.StopTask()
+                        print("Stopping acquisition\nAcquired {0} data points".format(len(pmt1_signal.a)))
+                        gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val]) # keep record of last gain value used
+                        # save data
+                        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
+                        s = input("Enter file name or press Enter to save timestamped file in current directory: ")
+                        if s == "":
+                            timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
+                            s = os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp))
+                        else:
+                            if not os.path.isabs(s):
+                                s = os.path.join(os.curdir, s) # if no absolute path is entered, the file will just be written to the current directory
+                        df.to_csv(s, sep=",", index=False)
+                        print("Data saved to {0}".format(s))
+                        # clear task
+                        pmt1_signal.ClearTask()
+                        acq = False # break the outer loop
+
                     else:
-                        if not os.path.isabs(s):
-                            s = os.path.join(os.curdir, s) # if no absolute path is entered, the file will just be written to the current directory
-                    df.to_csv(s, sep=",", index=False)
-                    print("Data saved to {0}".format(s))
-                    # clear task
-                    pmt1_signal.ClearTask()
-                    acq = False # break the outer loop
+                        invalid_input = True
+                        print('You entered "{0}", which is not a valid input'.format(user_input))
 
-            # catch most exceptions (not KeyboardInterrupt or SystemExit) and save data before aborting the program, raise the original exception for debugging
-            # TODO: implement more specific catches for the inputs above to be able to correct instead of abort
+            # catch all other exceptions and save data before aborting the program
             except Exception as e:
                 pmt1_signal.StopTask()
                 print("\n!!Unexpected error!!\nTrying to save data before exiting")
