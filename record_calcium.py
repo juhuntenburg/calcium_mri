@@ -14,7 +14,6 @@ sns.set_context('talk')
 
 def run_animation():
     running = True
-
     # define method to stop animation upon click
     def onClick(event):
         nonlocal running
@@ -25,7 +24,7 @@ def run_animation():
             anim.event_source.start()
             running = True
 
-    # main animation
+    # main animation function
     def animate(i):
         xs = np.arange(pmt1_signal.n,pmt1_signal.n+100)
         ys = pmt1_signal.data
@@ -40,21 +39,22 @@ def run_animation():
     anim = animation.FuncAnimation(fig, animate, interval=1)
 
 # Class to read voltage from input channel and use callback function to interrupt upon input
+# Can be modified to read data from multiple input channels
 class ReadPMT1(Task):
     def __init__(self):
         Task.__init__(self)
-        self.data = np.zeros(100)
-        self.n = 0
-        self.a = []
-        self.CreateAIVoltageChan("Dev1/ai0","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None)
-        self.CfgSampClkTiming(None,1000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,100)
-        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,100,0)
-        self.AutoRegisterDoneEvent(0)
+        self.data = np.zeros(100) # dummy array to write data from current buffer
+        self.n = 0 # counting sampling events
+        self.a = [] # list to write all acquired data into
+        self.CreateAIVoltageChan("Dev1/ai13","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None) # Create Voltage input channel to acquire between 0 and 10 Volts
+        self.CfgSampClkTiming(None,1000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,100) # Acquire samples continuously with a sampling frequency of 1000 Hz on the rising edge of the sampling of the onboard clock, buffer size of 100
+        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,100,0) # Auto register the callback functions
+        self.AutoRegisterDoneEvent(0) # Auto register the callback functions
     def EveryNCallback(self):
         read = PyDAQmx.int32()
-        self.ReadAnalogF64(100,10.0,PyDAQmx.DAQmx_Val_GroupByScanNumber,self.data,100,byref(read),None)
-        self.a.extend(self.data.tolist())
-        self.n += 100
+        self.ReadAnalogF64(100,10.0,PyDAQmx.DAQmx_Val_GroupByScanNumber,self.data,100,byref(read),None) # sample 100 data points into each buffer and then read them into the data array (size 100), time out after 10 seconds
+        self.a.extend(self.data.tolist()) # add current data to all acquired data
+        self.n += 100 # count sample points
         #print(self.n, self.data[0])
         return 0
     def DoneCallback(self, status):
@@ -68,58 +68,62 @@ if __name__ == "__main__":
         gains = []
         while acq == True:
             try:
-
                 # Ask for voltage gain value
                 pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
-                print("Setting voltage gain to {0}".format(pmt1_gain_val))
                 # Create an analog output channel with a range of 0-1.25 V range and write out the voltage value set above
                 pmt1_gain = Task()
-                pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao0","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
+                pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao1","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
                 pmt1_gain.StartTask()
-                print("Acquiring PMT1 continuously")
+                print("Setting voltage gain to {0}".format(pmt1_gain_val))
                 pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
                 pmt1_gain.StopTask()
                 pmt1_gain.ClearTask()
 
                 if first_pass == True:
-                    # Start the acquisition
+                    # Start the acquisition of the PMT signal using the class above
                     pmt1_signal = ReadPMT1()
                     pmt1_signal.StartTask()
+                    print("Acquiring PMT1 continuously")
                     first_pass = False
                 else:
+                    # If the gain has been changed during running acqusition, keep record for how long the previous gain was used
                     gains.extend((len(pmt1_signal.a)-len(gains))*[old_pmt1_gain_val])
 
                 user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
-
                 while user_input == 'p':
                     # plot and keep waiting for input
                     fig = plt.figure(figsize=(10,5))
                     ax1 = fig.add_subplot(1,1,1)
                     run_animation()
-                    plt.show()
-                    user_input = input('')
+                    plt.show() # This will block the command line until the figure is closed
+                    user_input = input('Enter p to plot data, x to stop acquisition or c to change the voltage gain: ')
 
                 if user_input == 'c':
-                    old_pmt1_gain_val = pmt1_gain_val
+                    old_pmt1_gain_val = pmt1_gain_val # store the previous gain value before resetting it
                     pass # go back to the beginning of the outer loop
 
                 elif user_input == 'x':
                     # stop task
-                    print("Stopped acquisition. Acquired {0} data points".format(len(pmt1_signal.a)))
                     pmt1_signal.StopTask()
-                    gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val])
+                    print("Stopped acquisition. Acquired {0} data points".format(len(pmt1_signal.a)))
+                    gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val]) # keep record of last gain value used
                     # save data
                     df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])
-                    s = input("To save data, enter absolute file path or press Enter to save data with time stamp in current directory: ")
+                    s = input("To save data, enter filename or path or press Enter to save data with time stamp in current directory: ")
                     if s == "":
                         timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
-                        df.to_csv(os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp)), sep=",", index=False)
+                        s = os.path.join(os.curdir,"{0}_pmt1_trace.csv".format(timestamp))
                     else:
-                        df.to_csv(s, sep=",", index=False)
+                        if not os.path.isabs(s):
+                            s = os.path.join(os.curdir, s) # if no absolute path is entered, the file will just be written to the current directory
+                    df.to_csv(s, sep=",", index=False)
+                    print("Data saved to {0}".format(s))
                     # clear task
                     pmt1_signal.ClearTask()
                     acq = False # break the outer loop
 
+            # catch most exceptions (not KeyboardInterrupt or SystemExit) and save data before aborting the program, raise the original exception for debugging
+            # TODO: implement more specific catches for the inputs above to be able to correct instead of abort
             except Exception as e:
                 pmt1_signal.StopTask()
                 print("\n!!Unexpected error!!\nTrying to save data before exiting")
