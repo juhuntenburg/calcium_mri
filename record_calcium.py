@@ -26,9 +26,11 @@ def run_animation():
 
     # main animation function
     def animate(i):
-        xs = np.arange(pmt1_signal.n,pmt1_signal.n+100)
+        xs = np.arange(pmt1_signal.n,pmt1_signal.n+1000)
         ys = pmt1_signal.data
         ax1.clear()
+        ax1.get_xaxis().get_major_formatter().set_useOffset(False)
+        ax1.get_yaxis().get_major_formatter().set_useOffset(False)
         ax1.set_xlabel("Time [ms]")
         ax1.set_ylabel("Signal [V]")
         ax1.set_title("PMT1")
@@ -43,18 +45,18 @@ def run_animation():
 class ReadPMT1(Task):
     def __init__(self):
         Task.__init__(self)
-        self.data = np.zeros(100) # dummy array to write data from current buffer
+        self.data = np.zeros(1000) # dummy array to write data from current buffer
         self.n = 0 # counting sampling events
         self.a = [] # list to write all acquired data into
         self.CreateAIVoltageChan("Dev1/ai13","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None) # Create Voltage input channel to acquire between 0 and 10 Volts
-        self.CfgSampClkTiming(None,1000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,100) # Acquire samples continuously with a sampling frequency of 1000 Hz on the rising edge of the sampling of the onboard clock, buffer size of 100
-        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,100,0) # Auto register the callback functions
+        self.CfgSampClkTiming(None,10000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,1000) # Acquire samples continuously with a sampling frequency of 1000 Hz on the rising edge of the sampling of the onboard clock, buffer size of 100
+        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,1000,0) # Auto register the callback functions
         self.AutoRegisterDoneEvent(0) # Auto register the callback functions
     def EveryNCallback(self):
         read = PyDAQmx.int32()
-        self.ReadAnalogF64(100,10.0,PyDAQmx.DAQmx_Val_GroupByScanNumber,self.data,100,byref(read),None) # sample 100 data points into each buffer and then read them into the data array (size 100), time out after 10 seconds
+        self.ReadAnalogF64(1000,10.0,PyDAQmx.DAQmx_Val_GroupByScanNumber,self.data,1000,byref(read),None) # sample 100 data points into each buffer and then read them into the data array (size 100), time out after 10 seconds
         self.a.extend(self.data.tolist()) # add current data to all acquired data
-        self.n += 100 # count sample points
+        self.n += 1000 # count sample points
         #print(self.n, self.data[0])
         return 0
     def DoneCallback(self, status):
