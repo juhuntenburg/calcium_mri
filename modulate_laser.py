@@ -1,8 +1,4 @@
-# sine wave
-# 0-5V
-# amplitude 2.5
-# offset 2.5
-# modulation frequency 1100 Hz
+
 # Before running the first in-vivo experiment,
 # acquire a noise measurement by setting your
 # laser emission mode to continuous wave (ignoring
@@ -21,11 +17,26 @@ import PyDAQmx
 import numpy as np
 
 # Modulation frequency in Hertz
-mod_freq = 1100
+mod_frequency = 1100
+mod_amplitude = 1.5
+mod_offset = 1.5
 
 laser_mod = Task()
-laser_mod.CreateAOVoltageChan("/Dev1/ao0","Laser_modulation",0,5,PyDAQmx.DAQmx_Val_Volts,None)
+laser_mod.CreateAOFuncGenChan("/Dev2/ao1","Laser_modulation", PyDAQmx.DAQmx_Val_Sine, mod_frequency, mod_amplitude, mod_offset)
 laser_mod.StartTask()
-laser_mod.WriteAnalogScalarF64(1,0,voltage,None)
 laser_mod.StopTask()
 laser_mod.ClearTask()
+
+
+# test_Task = nidaqmx.Task()
+# test_Task.ao_channels.add_ao_voltage_chan('myDAQ1/ao1')
+# test_Task.timing.cfg_samp_clk_timing(rate= 80, sample_mode= AcquisitionType.FINITE, samps_per_chan= 40)
+#
+# test_Writer = nidaqmx.stream_writers.AnalogSingleChannelWriter(test_Task.out_stream, auto_start=True)
+#
+# samples = np.append(5*np.ones(30), np.zeros(10))
+#
+# test_Writer.write_many_sample(samples)
+# test_Task.wait_until_done()
+# test_Task.stop()
+# test_Task.close()
