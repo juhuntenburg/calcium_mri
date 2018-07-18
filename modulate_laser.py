@@ -15,28 +15,42 @@
 from PyDAQmx import Task
 import PyDAQmx
 import numpy as np
-
-# Modulation frequency in Hertz
-mod_frequency = 1100
-mod_amplitude = 1.5
-mod_offset = 1.5
-
-laser_mod = Task()
-laser_mod.CreateAOFuncGenChan("/Dev2/ao1","Laser_modulation", PyDAQmx.DAQmx_Val_Sine, mod_frequency, mod_amplitude, mod_offset)
-laser_mod.StartTask()
-laser_mod.StopTask()
-laser_mod.ClearTask()
+from ctypes import byref
 
 
-# test_Task = nidaqmx.Task()
-# test_Task.ao_channels.add_ao_voltage_chan('myDAQ1/ao1')
-# test_Task.timing.cfg_samp_clk_timing(rate= 80, sample_mode= AcquisitionType.FINITE, samps_per_chan= 40)
-#
-# test_Writer = nidaqmx.stream_writers.AnalogSingleChannelWriter(test_Task.out_stream, auto_start=True)
-#
-# samples = np.append(5*np.ones(30), np.zeros(10))
-#
-# test_Writer.write_many_sample(samples)
-# test_Task.wait_until_done()
-# test_Task.stop()
-# test_Task.close()
+class Laser(Task):
+    def __init__(self):
+        Task.__init__(self)
+        # Modulation frequency in Hertz
+        self.samp_frequency = 100 # sampling rate
+        self.mod_frequency = 10 #1100
+        self.mod_amplitude = 1.5
+        self.mod_offset = 1.5
+        self.samples = 1000
+        self.i = 1
+        # create the sine sinewave
+        self.x = np.arange(samples)
+        self.sinewave = mod_offset + mod_amplitude*(np.sin(2 * np.pi * mod_frequency * x / samp_frequency)).astype(np.float64)
+        self.CreateAOVoltageChan("/Dev1/ao0","Laser",0,3,PyDAQmx.DAQmx_Val_Volts,None)
+        self.CfgSampClkTiming(None,self.samp_frequency,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,self.samples)
+        self.WriteAnalogF64(self.samples,0,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.sinewave[(self.i-1)*self.samples:self.i*self.samples],None,None)
+        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Transferred_From_Buffer,self.samples,0) # Auto register the callback functions
+        self.AutoRegisterDoneEvent(0)
+    def EveryNCallback(self):
+        self.i = self.i + 1
+        write = daq.int32()
+        self.WriteAnalogF64(self.samples,0,0,PyDAQmx.DAQmx_Val_GroupByChannel,self.sinewave[(self.i-1)*self.samples:self.i*self.samples],byref(write),None)
+        return 0 # The function should return an integer
+        # self.a.extend(np.concatenate((np.ones(500), np.zeros(500))))
+        # extend to fit number of timepoints in ca trace
+        return 0
+    def DoneCallback(self, status):
+        print("Status",status.value)
+        return 0
+
+
+laser = Laser()
+laser.StartTask()
+print("Modulating Laser")
+laser.StopTask()
+laser.ClearTask()
