@@ -68,7 +68,6 @@ class LED(Task):
     def __init__(self):
         Task.__init__(self)
         self.data = np.concatenate((np.ones(50000)*4, np.zeros(50000)))
-        self.a = []
         self.CreateAOVoltageChan("/Dev1/ao0","LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
         self.CfgSampClkTiming(None,10000,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,10000)
         self.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger",PyDAQmx.DAQmx_Val_Rising)
