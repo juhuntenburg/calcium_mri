@@ -49,7 +49,7 @@ class ReadPMT1(Task):
         self.data = np.zeros(1000) # dummy array to write data from current buffer
         self.n = 0 # counting sampling events
         self.a = [] # list to write all acquired data into
-        self.CreateAIVoltageChan("/Dev1/ai13","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None) # Create Voltage input channel to acquire between 0 and 10 Volts
+        self.CreateAIVoltageChan("/Dev2/ai13","PMT1_signal",PyDAQmx.DAQmx_Val_Cfg_Default,0,10.0,PyDAQmx.DAQmx_Val_Volts,None) # Create Voltage input channel to acquire between 0 and 10 Volts
         self.CfgSampClkTiming(None,10000.0,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,1000) # Acquire samples continuously with a sampling frequency of 1000 Hz on the rising edge of the sampling of the onboard clock, buffer size of 100
         self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,1000,0) # Auto register the callback functions
         self.AutoRegisterDoneEvent(0) # Auto register the callback functions
@@ -68,9 +68,9 @@ class LED(Task):
     def __init__(self):
         Task.__init__(self)
         self.data = np.concatenate((np.ones(50000)*4, np.zeros(50000)))
-        self.CreateAOVoltageChan("/Dev1/ao0","LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
+        self.CreateAOVoltageChan("/Dev2/ao0","LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
         self.CfgSampClkTiming(None,10000,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,10000)
-        self.CfgDigEdgeStartTrig("/Dev1/ai/StartTrigger",PyDAQmx.DAQmx_Val_Rising)
+        self.CfgDigEdgeStartTrig("/Dev2/ai/StartTrigger",PyDAQmx.DAQmx_Val_Rising)
         self.WriteAnalogF64(100000,0,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.data,None,None)
         self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Transferred_From_Buffer,10000,0) # Auto register the callback functions
         self.AutoRegisterDoneEvent(0)
@@ -81,6 +81,25 @@ class LED(Task):
     def DoneCallback(self, status):
         print("Status",status.value)
         return 0
+
+
+# class Laser(Task):
+#     def __init__(self):
+#         Task.__init__(self)
+#         self.data = np.concatenate((np.ones(50000)*4, np.zeros(50000)))
+#         self.CreateAOVoltageChan("/Dev2/ao0","LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
+#         self.CfgSampClkTiming(None,10000,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,10000)
+#         self.CfgDigEdgeStartTrig("/Dev2/ai/StartTrigger",PyDAQmx.DAQmx_Val_Rising)
+#         self.WriteAnalogF64(100000,0,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.data,None,None)
+#         self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Transferred_From_Buffer,10000,0) # Auto register the callback functions
+#         self.AutoRegisterDoneEvent(0)
+#     def EveryNCallback(self):
+#         # self.a.extend(np.concatenate((np.ones(500), np.zeros(500))))
+#         # extend to fit number of timepoints in ca trace
+#         return 0
+#     def DoneCallback(self, status):
+#         print("Status",status.value)
+#         return 0
 
 
 if __name__ == "__main__":
@@ -98,8 +117,14 @@ if __name__ == "__main__":
 
                 # Create an analog output channel with a range of 0-1.25 V range and write out the voltage value set above
                 pmt1_gain = Task()
-                pmt1_gain.CreateAOVoltageChan(b"/Dev1/ao1","PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
-                pmt1_gain.StartTask()
+                device = input("Enter device name: ").encode()
+                try:
+                    pmt1_gain.CreateAOVoltageChan(b"/%s/ao1"%device,"PMT1_voltage_gain",0,1.25,PyDAQmx.DAQmx_Val_Volts,None)
+                    pmt1_gain.StartTask()
+                except PyDAQmx.DAQmxFunctions.DevCannotBeAccessedError as deverr:
+                    print(deverr.message)
+                    device = input("Enter device name: ")
+
                 try:
                     pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
                     print("Setting voltage gain to {0}".format(pmt1_gain_val))
