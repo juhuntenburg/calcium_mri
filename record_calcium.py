@@ -8,7 +8,7 @@ from PyDAQmx import Task
 import PyDAQmx
 from ctypes import byref
 
-buffer_size = 10000
+buffer_size = 1000
 sampling_freq = 1000
 
 
@@ -46,6 +46,7 @@ def run_animation():
     anim = animation.FuncAnimation(fig, animate, interval=1)
 
 
+
 # Class to read voltage from input channel and use callback function to interrupt upon input
 # Can be modified to read data from multiple input channels
 class ReadPMT1(Task):
@@ -70,21 +71,42 @@ class ReadPMT1(Task):
         return 0
 
 
-class LED(Task):
-    def __init__(self):
-        Task.__init__(self)
-        self.data = np.concatenate((np.ones(sampling_freq-10)*4, np.zeros(10))) #np.concatenate((np.ones(50000)*4, np.zeros(50000)))
-        self.CreateAOVoltageChan(b"/%s/ao0"%device,"LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
-        self.CfgSampClkTiming(b"/%s/PFI4"%device,sampling_freq,PyDAQmx.DAQmx_Val_Rising, PyDAQmx.DAQmx_Val_ContSamps,buffer_size)
-        #self.CfgDigEdgeStartTrig(b"/%s/ao/StartTrigger"%device,PyDAQmx.DAQmx_Val_Rising)
-        self.WriteAnalogF64(sampling_freq,0,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.data,None,None)
-        self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Transferred_From_Buffer,sampling_freq,0) # Auto register the callback functions
-        self.AutoRegisterDoneEvent(0)
-    def EveryNCallback(self):
-        return 0
-    def DoneCallback(self, status):
-        print("Status",status.value)
-        return 0
+# class DetectTTL(Task):
+#     def __init__(self):
+#         Task.__init__(self)
+#         self.data = np.zeros(buffer_size, dtype=np.uint8) # dummy array to write data from current buffer
+#         self.n = 0 # counting sampling events
+#         self.a = [] # list to write all acquired data into
+#         self.CreateDIChan(b"/%s/PFI4"%device,"",PyDAQmx.DAQmx_Val_ChanPerLine);
+#         self.CfgSampClkTiming(None,sampling_freq,PyDAQmx.DAQmx_Val_Rising,PyDAQmx.DAQmx_Val_ContSamps,buffer_size)
+#         self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Acquired_Into_Buffer,buffer_size,0) # Auto register the callback functions
+#         self.AutoRegisterDoneEvent(0) # Auto register the callback functions
+#     def EveryNCallback(self):
+#         read = PyDAQmx.int32()
+#         self.ReadDigitalLines(buffer_size,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.data,8*buffer_size,byref(read),None);
+#         self.a.extend(self.data.tolist()) # add current data to all acquired data
+#         self.n += buffer_size # count sample points
+#         return 0
+#     def DoneCallback(self, status):
+#         print("Status",status.value)
+#         return 0
+
+
+# class LED(Task):
+#     def __init__(self):
+#         Task.__init__(self)
+#         self.data = np.concatenate((np.ones(sampling_freq-10)*4, np.zeros(10))) #np.concatenate((np.ones(50000)*4, np.zeros(50000)))
+#         self.CreateAOVoltageChan(b"/%s/ao0"%device,"LED",0,5,PyDAQmx.DAQmx_Val_Volts,None)
+#         self.CfgSampClkTiming(b"/%s/PFI4"%device,sampling_freq,PyDAQmx.DAQmx_Val_Rising, PyDAQmx.DAQmx_Val_ContSamps,buffer_size)
+#         #self.CfgDigEdgeStartTrig(b"/%s/ao/StartTrigger"%device,PyDAQmx.DAQmx_Val_Rising)
+#         self.WriteAnalogF64(sampling_freq,0,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.data,None,None)
+#         self.AutoRegisterEveryNSamplesEvent(PyDAQmx.DAQmx_Val_Transferred_From_Buffer,sampling_freq,0) # Auto register the callback functions
+#         self.AutoRegisterDoneEvent(0)
+#     def EveryNCallback(self):
+#         return 0
+#     def DoneCallback(self, status):
+#         print("Status",status.value)
+#         return 0
 
 
 if __name__ == "__main__":
@@ -114,7 +136,9 @@ if __name__ == "__main__":
                     pmt1_gain.WriteAnalogScalarF64(1,0,pmt1_gain_val,None)
                     print("Setting voltage gain to {0}".format(pmt1_gain_val))
                     pmt1_gain.StopTask()
+                    pulse.StopTask()
                     pmt1_gain.ClearTask()
+                    pulse.ClearTask()
                 except PyDAQmx.DAQmxFunctions.InvalidAODataWriteError as a:
                     print(a.message)
                     pmt1_gain_val = float(input("Enter voltage gain between 0.1 and 1.25 V: "))
@@ -131,11 +155,12 @@ if __name__ == "__main__":
 
                     # Generate pulse
                     pulse = Task()
-                    pulse.CreateCOPulseChanTime(b"/%s/ctr0"%device,"",PyDAQmx.DAQmx_Val_Seconds,PyDAQmx.DAQmx_Val_Low,10,5,5) #initial delay, low time, high time
+                    pulse.CreateCOPulseChanTime(b"/%s/ctr0"%device,"",PyDAQmx.DAQmx_Val_Seconds,PyDAQmx.DAQmx_Val_Low,30,15,15) #initial delay, low time, high time
                     pulse.CfgImplicitTiming(PyDAQmx.DAQmx_Val_ContSamps,buffer_size) #last is the number of pulses to generate in Finite mode
                     pulse.StartTask()
 
-                    # PyDAQmx.DAQmxConnectTerms(b"/%s/Ctr1Source"%device, b"/%s/Ctr0Gate"%device, PyDAQmx.DAQmx_Val_DoNotInvertPolarity)
+
+                    #PyDAQmx.DAQmxConnectTerms(b"/%s/PFI4"%device, b"/%s/PFI3"%device, PyDAQmx.DAQmx_Val_InvertPolarity)
                     # gate.StartTask()
                     # pulse.StartTask()
 
@@ -146,8 +171,10 @@ if __name__ == "__main__":
                     # led.CfgSampClkTiming(b"/%s/Ctr0Source"%device,sampling_freq,PyDAQmx.DAQmx_Val_Rising, PyDAQmx.DAQmx_Val_ContSamps,buffer_size)
                     # led.StartTask()
                     # led.WriteAnalogF64(100,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,led_data,None,None)
-                    # led = LED()
-                    # led.StartTask()
+                    #led = LED()
+                    #led.StartTask()
+                    #ttl = DetectTTL()
+                    #ttl.StartTask()
 
                     # Start the acquisition of the PMT signal using the class above
                     pmt1_signal = ReadPMT1()
@@ -180,15 +207,16 @@ if __name__ == "__main__":
                         invalid_input = False
                         # stop task
                         pmt1_signal.StopTask()
-                        led.StopTask()
-                        laser.StopTask()
+                        #led.StopTask()
+                        #laser.StopTask()
                         print("Stopping acquisition\nAcquired {0} data points".format(len(pmt1_signal.a)))
                         gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val]) # keep record of last gain value used
                         # create led data
-                        led_record = int(np.floor(len(pmt1_signal.a)/len(led.data)))*led.data.tolist()
-                        led_record.extend(led.data[:(len(pmt1_signal.a)-len(led_record))])
+                        #led_record = int(np.floor(len(pmt1_signal.a)/len(led.data)))*led.data.tolist()
+                        #led_record.extend(led.data[:(len(pmt1_signal.a)-len(led_record))])
                         # save data
-                        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains), np.asarray(led_record))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]', 'LED[V]'])
+                        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))),#, np.asarray(led_record))),
+                                          columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])#, 'LED[V]'])
                         s = input("Enter file name or press Enter to save timestamped file in current directory: ")
                         if s == "":
                             timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
@@ -201,7 +229,8 @@ if __name__ == "__main__":
                         # clear task
                         acq = False # break the outer loop
                         pmt1_signal.ClearTask()
-                        led.ClearTask()
+                        pulse.ClearTask()
+                        #led.ClearTask()
 
                     else:
                         invalid_input = True
@@ -210,13 +239,16 @@ if __name__ == "__main__":
             # catch all other exceptions and save data before aborting the program
             except Exception as e:
                 pmt1_signal.StopTask()
-                led.StopTask()
+                pulse.StopTask()
+                #led.StopTask()
                 print("\n!!Unexpected error!!\nTrying to save data before exiting")
                 timestamp = time.strftime('%Y_%m_%d_%H%M', time.localtime())
                 gains.extend((len(pmt1_signal.a)-len(gains))*[pmt1_gain_val])
-                df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains), np.asarray(led_record))), columns=['timepoint[ms]', 'signal[V]', 'gain[V]', 'LED[V]'])
+                df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), np.asarray(gains))),#, np.asarray(led_record))),
+                                  columns=['timepoint[ms]', 'signal[V]', 'gain[V]'])#, 'LED[V]'])
                 df.to_csv(os.path.join(os.curdir,"{0}_pmt1_crash.csv".format(timestamp)), sep=",", index=False)
                 pmt1_signal.ClearTask()
-                led.ClearTask()
+                pulse.ClearTask()
+                #led.ClearTask()
                 print("Data saved to {0}_pmt1_crash.csv\n".format(timestamp))
                 raise e
