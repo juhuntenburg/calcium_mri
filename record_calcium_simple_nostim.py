@@ -18,7 +18,7 @@ stim_freq = 2 #Hz
 pulse_width = 10 # msec
 cycles = 5
 
-pmt1_gain_val=0.5
+pmt1_gain_val=0.3
 device="Dev1".encode()
 
 sns.set()
@@ -48,6 +48,7 @@ def run_animation():
         ax1.set_ylabel("Signal [V]")
         #ax1.set_ylim(1.8,2.1)
         ax1.set_title("PMT")
+        ax1.set_ylim(0.02,0.04)
         ax1.plot(xs, ys)
         sns.despine()
 
@@ -102,37 +103,47 @@ if __name__ == "__main__":
     run_animation()
     plt.show()
 
-    pmt1_signal.StopTask()
-    pmt1_signal.ClearTask()
-    user_input = input('Enter v to start the stimulation or x to exit: ')
+    # pmt1_signal.StopTask()
+    # pmt1_signal.ClearTask()
+    user_input = input('Enter x to exit and save: ')
+    #user_input = input('Enter v to start the stimulation or x to exit: ')
 
-    if user_input == 'v':
+    # if user_input == 'v':
+    #
+    #     pmt_stim = ReadPMT1()
+    #     pulse = Task()
+    #     pulse.CreateCOPulseChanFreq(b"/%s/ctr0"%device,"", PyDAQmx.DAQmx_Val_Hz, PyDAQmx.DAQmx_Val_Low, stim_off, stim_freq, pulse_width/((1/stim_freq)*1000))#initial delay, freq, duty cycle=pulse width over period (both in sec)
+    #     pulse.CfgImplicitTiming(PyDAQmx.DAQmx_Val_FiniteSamps,stim_on*stim_freq) #last is the number of pulses to generate in Finite mode
+    #     stim_data = []
+    #
+    #     pmt_stim.StartTask()
+    #     for c in range(cycles):
+    #         pulse.StartTask()
+    #         pulse.WaitUntilTaskDone(-1)
+    #         pulse.StopTask()
+    #     time.sleep(stim_off)
+    #     pmt_stim.StopTask()
+    #     stim_data = cycles*(stim_off*sampling_freq*[0]+stim_on*sampling_freq*[1])+stim_off*sampling_freq*[0]
+    #     print('Visual stimulation finished, saving data')
+    #
+    #     df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt_stim.a)), np.asarray(pmt_stim.a), np.asarray(stim_data))),#, np.asarray(led_record))),
+    #                       columns=['timepoint[ms]', 'signal[V]', 'stim'])
+    #     timestamp = time.strftime('%Y%m%d_%H%M', time.localtime())
+    #     s = os.path.join(os.curdir,"{0}_{1}_{2}_{3}_{4}_{5}.csv".format(timestamp, pmt1_gain_val, stim_off, stim_on, stim_freq, pulse_width))
+    #     df.to_csv(s, sep=",", index=False)
+    #     print("Data saved to {0}".format(s))
+    #     # clear task
+    #     pmt_stim.ClearTask()
+    #     pulse.ClearTask()
 
-        pmt_stim = ReadPMT1()
-        pulse = Task()
-        pulse.CreateCOPulseChanFreq(b"/%s/ctr0"%device,"", PyDAQmx.DAQmx_Val_Hz, PyDAQmx.DAQmx_Val_Low, stim_off, stim_freq, pulse_width/((1/stim_freq)*1000))#initial delay, freq, duty cycle=pulse width over period (both in sec)
-        pulse.CfgImplicitTiming(PyDAQmx.DAQmx_Val_FiniteSamps,stim_on*stim_freq) #last is the number of pulses to generate in Finite mode
-        stim_data = []
+    if user_input == 'x':
+        print('Saving data')
 
-        pmt_stim.StartTask()
-        for c in range(cycles):
-            pulse.StartTask()
-            pulse.WaitUntilTaskDone(-1)
-            pulse.StopTask()
-        time.sleep(stim_off)
-        pmt_stim.StopTask()
-        stim_data = cycles*(stim_off*sampling_freq*[0]+stim_on*sampling_freq*[1])+stim_off*sampling_freq*[0]
-        print('Visual stimulation finished, saving data')
-
-        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt_stim.a)), np.asarray(pmt_stim.a), np.asarray(stim_data))),#, np.asarray(led_record))),
-                          columns=['timepoint[ms]', 'signal[V]', 'stim'])
+        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), )),#, np.asarray(led_record))),
+                          columns=['timepoint[ms]', 'signal[V]'])
         timestamp = time.strftime('%Y%m%d_%H%M', time.localtime())
-        s = os.path.join(os.curdir,"{0}_{1}_{2}_{3}_{4}_{5}.csv".format(timestamp, pmt1_gain_val, stim_off, stim_on, stim_freq, pulse_width))
+        s = os.path.join(os.curdir,"{0}_{1}.csv".format(timestamp, pmt1_gain_val)) #, stim_off, stim_on, stim_freq, pulse_width))
         df.to_csv(s, sep=",", index=False)
         print("Data saved to {0}".format(s))
-        # clear task
-        pmt_stim.ClearTask()
-        pulse.ClearTask()
-
-    elif user_input == 'x':
-        pass
+        pmt1_signal.StopTask()
+        pmt1_signal.ClearTask()
