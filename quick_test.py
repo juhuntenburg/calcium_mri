@@ -8,12 +8,47 @@ from PyDAQmx import Task
 import PyDAQmx
 from ctypes import byref
 
-buffer_size = 1000
-sampling_freq = 1000
+buffer_size = 100
+sampling_freq = 100
 
-concentration=1
 pmt1_gain_val=0.3
 device="Dev1".encode()
+out_dir="C:/Users/julia/data/test_objective/"
+
+sns.set()
+sns.set_style('ticks')
+sns.set_context('talk')
+
+def run_animation():
+    running = True
+    # define method to stop animation upon click
+    def onClick(event):
+        nonlocal running
+        if running:
+            anim.event_source.stop()
+            running = False
+        else:
+            anim.event_source.start()
+            running = True
+
+    # main animation function
+    def animate(i):
+        xs = np.arange(pmt1_signal.n-sampling_freq*10,pmt1_signal.n)/sampling_freq
+        ys = pmt1_signal.a[pmt1_signal.n-sampling_freq*10:pmt1_signal.n]
+        ax1.clear()
+        ax1.get_xaxis().get_major_formatter().set_useOffset(False)
+        ax1.get_yaxis().get_major_formatter().set_useOffset(False)
+        ax1.set_xlabel("Time [s]")
+        ax1.set_ylabel("Signal [V]")
+        ax1.set_title("PMT")
+        #ax1.set_ylim(2.5,3.5)
+        ax1.plot(xs, ys)
+        sns.despine()
+
+    fig.canvas.mpl_connect('button_press_event', onClick)
+    anim = animation.FuncAnimation(fig, animate, interval=0.1)
+
+
 
 # Class to read voltage from input channel and use callback function to interrupt upon input
 # Can be modified to read data from multiple input channels
@@ -52,17 +87,13 @@ if __name__ == "__main__":
 
     pmt1_signal = ReadPMT1()
     pmt1_signal.StartTask()
-    print('Recording')
-    while len(pmt1_signal.a) < 30*sampling_freq:
+    print('Waiting for signal')
+    while len(pmt1_signal.a) <= 10*sampling_freq:
         time.sleep(0.01)
+
+    fig = plt.figure(figsize=(10,5))
+    ax1 = fig.add_subplot(1,1,1)
+    run_animation()
+    plt.show()
     pmt1_signal.StopTask()
-    df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)),
-                                       np.asarray(pmt1_signal.a), )),
-                      columns=['timepoint[ms]', 'signal[V]'])
-    p = input('Power': ')
-    s = '%s_%s_%s.csv' %(str(concentration), str(p), str(pmt1_gain_val))
-    if not os.path.isabs(s):
-        s = os.path.join(os.curdir, s)
-    df.to_csv(s, sep=",", index=False)
-    print("Data saved to {0}".format(s))
     pmt1_signal.ClearTask()
