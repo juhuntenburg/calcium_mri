@@ -11,7 +11,7 @@ from ctypes import byref
 buffer_size = 1000
 sampling_freq = 1000
 
-concentration=1
+concentration=0
 pmt1_gain_val=0.3
 device="Dev1".encode()
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)),
                                        np.asarray(pmt1_signal.a), )),
                       columns=['timepoint[ms]', 'signal[V]'])
-    p = input('Power': ')
+    p = input('Power: ')
     s = '%s_%s_%s.csv' %(str(concentration), str(p), str(pmt1_gain_val))
     if not os.path.isabs(s):
         s = os.path.join(os.curdir, s)
