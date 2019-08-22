@@ -11,9 +11,9 @@ from ctypes import byref
 buffer_size = 1000
 sampling_freq = 1000
 
-pmt1_gain_val=0.3
+pmt1_gain_val=1.0
 device="Dev1".encode()
-out_dir="C:/Users/julia/data/test_objective/"
+out_dir="C:/Users/nmrsu/julia/"
 
 sns.set()
 sns.set_style('ticks')
@@ -87,25 +87,17 @@ if __name__ == "__main__":
 
     pmt1_signal = ReadPMT1()
     pmt1_signal.StartTask()
-    print('Waiting for signal')
-    while len(pmt1_signal.a) <= 10*sampling_freq:
+    print('Recording')
+    while len(pmt1_signal.a) < 60*sampling_freq:
         time.sleep(0.01)
-
-    fig = plt.figure(figsize=(10,5))
-    ax1 = fig.add_subplot(1,1,1)
-    run_animation()
-    plt.show()
-
-    user_input = input('Enter x to exit and save: ')
-
-    if user_input == 'x':
-        print('Saving data')
-
-        df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)), np.asarray(pmt1_signal.a), )),#, np.asarray(led_record))),
-                          columns=['timepoint[ms]', 'signal[V]'])
-        timestamp = time.strftime('%Y%m%d_%H%M', time.localtime())
-        s = os.path.join(out_dir,"{0}_{1}.csv".format(timestamp, pmt1_gain_val)) #, stim_off, stim_on, stim_freq, pulse_width))
-        df.to_csv(s, sep=",", index=False)
-        print("Data saved to {0}".format(s))
-        pmt1_signal.StopTask()
-        pmt1_signal.ClearTask()
+    pmt1_signal.StopTask()
+    df = pd.DataFrame(np.column_stack((np.arange(0, len(pmt1_signal.a)),
+                                       np.asarray(pmt1_signal.a), )),
+                      columns=['timepoint[ms]', 'signal[V]'])
+    s = input('Filename: ')
+    if not os.path.isabs(s):
+        s = os.path.join(os.curdir, s)
+    print('Saving data')
+    df.to_csv(s, sep=",", index=False)
+    print("Data saved to {0}".format(s))
+    pmt1_signal.ClearTask()
